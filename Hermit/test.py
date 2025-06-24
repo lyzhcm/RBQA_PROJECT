@@ -16,6 +16,11 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from sentence_transformers import SentenceTransformer
+import sys
+import os
+#这里是添加路径，后续需要删除
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from AIrespond import ask_ai
 
 # 下载NLTK资源（首次运行时需要）
 try:
@@ -387,7 +392,7 @@ def qa_interface():
 
     # 用户输入问题
     question = st.chat_input("请输入您的问题...")
-
+    aiquestion = question + "\n"
     if question:
         # 确保嵌入模型已加载
         if not st.session_state.embedding_model:
@@ -429,6 +434,7 @@ def qa_interface():
             for idx, score in similarities[:3]:
                 if score > 0.3:  # 设置相似度阈值
                     top_matches.append(st.session_state.knowledge_base[idx])
+                    aiquestion += f"\n【相关片段{i+1}】{match['content'][:200]}..."
 
         # 生成答案
         with st.spinner("正在生成答案..."):
@@ -455,6 +461,9 @@ def qa_interface():
 
             # 添加到对话历史
             st.session_state.conversation.append(f"系统: {answer}")
+
+            #添加ai解答
+            answer += ask_ai(aiquestion)
 
             # 显示答案
             with st.chat_message(name="🤖 系统"):
