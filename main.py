@@ -57,6 +57,11 @@ def qa_interface():
     from UI import qa_interface as qa_func
     qa_func()
 
+def is_model_downloaded(model_name):
+    # SentenceTransformer 默认缓存路径
+    cache_dir = os.path.expanduser("~/.cache/torch/sentence_transformers")
+    model_dir = os.path.join(cache_dir, model_name)
+    return os.path.exists(model_dir) and os.path.isdir(model_dir)
 
 def main():
     st.set_page_config(
@@ -65,15 +70,20 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded"
     )
-    if "model_downloaded" not in st.session_state:
-        with st.spinner("正在预下载语义模型（约1.2GB，首次运行需要时间）..."):
-            try:
-                model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-                st.session_state.model_downloaded = True
-                st.session_state.embedding_model = model
-            except Exception as e:
-                st.error(f"模型下载失败: {str(e)}")
-                return
+    model_name = 'paraphrase-multilingual-MiniLM-L12-v2'
+    # 只依赖本地模型检测，不依赖 session_state
+    if "embedding_model" not in st.session_state or st.session_state.embedding_model is None:
+        if is_model_downloaded(model_name):
+            model = SentenceTransformer(model_name)
+            st.session_state.embedding_model = model
+        else:
+            with st.spinner("正在检测是否已预下载语义模型（约1.2GB，如首次运行需要时间）..."):
+                try:
+                    model = SentenceTransformer(model_name)
+                    st.session_state.embedding_model = model
+                except Exception as e:
+                    st.error(f"模型下载失败: {str(e)}")
+                    return
 
     init_session()
     st.title("📚 智能文献问答系统")
