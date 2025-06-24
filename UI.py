@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+
 from Files_Operator import parse_file, generate_file_id, load_embedding_model
 from Database_Operator import (
     delete_file,
@@ -10,32 +11,10 @@ from Database_Operator import (
     update_vector_store
 )
 from AI_Respond import ask_ai
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
-
-# DeepSeek AI 接口配置（如需）
-def setup_deepseek():
-    import openai
-    # openai.api_key = st.secrets.get("OPENAI_API_KEY", "")
-    # openai.base_url = "https://api.gpt.ge/v1/"
-    pass
 
 # 知识库管理界面
 def knowledge_base_section():
     st.header("📚 知识库构建与管理")
-    # 初始化 session_state 字段
-    for key, default in [
-        ("embedding_model", None),
-        ("uploaded_files", []),
-        ("vector_db", None),
-        ("text_splitter", None),
-        ("knowledge_base", []),
-        ("deleted_files", []),
-    ]:
-        if key not in st.session_state:
-            st.session_state[key] = default
 
     # 文件上传区域
     uploaded_files = st.file_uploader(
@@ -71,12 +50,8 @@ def knowledge_base_section():
                         })
 
                         # 分割内容为知识片段
-                        if st.session_state.text_splitter and hasattr(st.session_state.text_splitter, "split_text"):
-                            chunks = st.session_state.text_splitter.split_text(content)
-                        else:
-                            # 兜底：简单按段落分割
-                            chunks = content.split('\n\n')
-
+                        chunks = st.session_state.text_splitter.split_text(content)
+                        
                         # 存储到向量数据库
                         st.session_state.vector_db.add_texts(
                             texts=chunks,
@@ -199,9 +174,6 @@ def knowledge_base_section():
 # 问答界面（结合语义理解和DeepSeek）
 def qa_interface():
     st.header("💬 智能问答系统")
-    # 初始化对话历史
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = []
 
     # 显示对话历史
     if st.session_state.conversation:
@@ -251,8 +223,11 @@ def qa_interface():
             # 显示参考文献
             with st.expander("📚 参考文档", expanded=False):
                 for i, doc in enumerate(docs, 1):
-                    st.caption(f"【文献{i}】{doc.metadata['source']}")
-                    st.text(doc.page_content[:200] + "...")
+                    # 兼容无metadata或无source的情况
+                    source = getattr(doc, "metadata", {}).get("source", getattr(doc, "source", f"文档{i}"))
+                    content = getattr(doc, "page_content", str(doc))[:200] + "..."
+                    st.caption(f"【文献{i}】{source}")
+                    st.text(content)
 
             # 显示语义分析详情
             with st.expander("🔍 语义分析详情", expanded=False):
@@ -262,74 +237,3 @@ def qa_interface():
                     "匹配片段数": len(docs),
                     "提示词": prompt[:500] + "..." if len(prompt) > 500 else prompt
                 })
-
-# 初始化会话状态
-def init_session():
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = []
-    if "uploaded_files" not in st.session_state:
-        st.session_state.uploaded_files = []
-    if "knowledge_base" not in st.session_state:
-        st.session_state.knowledge_base = []
-    if "deleted_files" not in st.session_state:
-        st.session_state.deleted_files = []
-    if "embedding_model" not in st.session_state:
-        st.session_state.embedding_model = None
-    if "knowledge_vectors" not in st.session_state:
-        st.session_state.knowledge_vectors = []
-    if "vector_db" not in st.session_state:
-        st.session_state.embedding_model_langchain = HuggingFaceEmbeddings(
-            model_name="GanymedeNil/text2vec-large-chinese",
-            model_kwargs={'device': 'cpu'}
-        )
-        st.session_state.vector_db = Chroma(
-            embedding_function=st.session_state.embedding_model_langchain,
-            persist_directory="./chroma_db"
-        )
-    if "text_splitter" not in st.session_state:
-        st.session_state.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-
-def main():
-    st.set_page_config(
-        page_title="智能文献问答系统",
-        page_icon="📚",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    # 新增预下载检查
-    if "model_downloaded" not in st.session_state:
-        with st.spinner("正在预下载语义模型（约1.2GB，首次运行需要时间）..."):
-            try:
-                # 强制提前下载
-                model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-                st.session_state.model_downloaded = True
-                st.session_state.embedding_model = model
-            except Exception as e:
-                st.error(f"模型下载失败: {str(e)}")
-                return
-
-    setup_deepseek()
-    init_session()
-    st.title("📚 智能文献问答系统")
-    st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
-
-    # 侧边栏导航
-    with st.sidebar:
-        st.subheader("导航")
-        page = st.radio("选择功能", ["知识库管理", "智能问答"])
-
-    # 显示对应的页面
-    if page == "知识库管理":
-        knowledge_base_section()
-    else:
-        # 保证对话历史初始化
-        if "conversation" not in st.session_state:
-            st.session_state.conversation = []
-        qa_interface()
-
-if __name__ == "__main__":
-    main()
