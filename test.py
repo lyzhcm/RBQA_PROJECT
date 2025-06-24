@@ -4,7 +4,7 @@ from Reader import Reader
 reader = Reader()
 
 # 调用 read 方法读取文件内容
-file_path = 'example.pdf'  # 替换为你的文件路径
+file_path = 'H:\RBQA_PROJECT\RBQA_PROJECT\sheet.pdf'  # 替换为你的文件路径
 content = reader.read(file_path)
 
 # 打印读取的内容
