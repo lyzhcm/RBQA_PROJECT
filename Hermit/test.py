@@ -9,6 +9,21 @@ from PyPDF2 import PdfReader
 import pptx
 import tempfile
 import hashlib
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from sentence_transformers import SentenceTransformer
+
+# 下载NLTK资源（首次运行时需要）
+try:
+    nltk.data.find('tokenizers/punkt')
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('punkt')
+    nltk.download('stopwords')
 
 
 # 初始化会话状态
@@ -21,6 +36,16 @@ def init_session():
         st.session_state.knowledge_base = []
     if "deleted_files" not in st.session_state:
         st.session_state.deleted_files = []
+    if "embedding_model" not in st.session_state:
+        st.session_state.embedding_model = None
+    if "knowledge_vectors" not in st.session_state:
+        st.session_state.knowledge_vectors = []
+
+
+# 加载嵌入模型（缓存避免重复加载）
+@st.cache_resource
+def load_embedding_model():
+    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 
 # 生成文件唯一ID
@@ -67,6 +92,20 @@ def parse_file(file):
         return None
 
 
+# 文本预处理函数
+def preprocess_text(text):
+    # 转换为小写
+    text = text.lower()
+    # 移除特殊字符和数字
+    text = re.sub(r'[^a-zA-Z\u4e00-\u9fff\s]', '', text)
+    # 分词
+    tokens = word_tokenize(text)
+    # 移除停用词
+    stop_words = set(stopwords.words('english') + stopwords.words('chinese'))
+    tokens = [word for word in tokens if word not in stop_words]
+    return " ".join(tokens)
+
+
 # 将文档内容分割为适合处理的片段
 def split_into_chunks(text, chunk_size=200):
     chunks = []
@@ -76,6 +115,35 @@ def split_into_chunks(text, chunk_size=200):
         chunks.append(" ".join(words[i:i + chunk_size]))
 
     return chunks
+
+
+# 语义分析函数
+def semantic_analysis(question):
+    # 1. 意图识别
+    intent = "信息查询"  # 默认意图
+
+    if any(word in question.lower() for word in ["如何", "怎样", "步骤"]):
+        intent = "操作指导"
+    elif any(word in question.lower() for word in ["为什么", "原因", "为何"]):
+        intent = "原因解释"
+    elif any(word in question.lower() for word in ["比较", "对比", "vs"]):
+        intent = "比较分析"
+    elif any(word in question.lower() for word in ["推荐", "建议", "应该"]):
+        intent = "推荐建议"
+
+    # 2. 关键实体提取（简化版）
+    # 使用正则表达式提取可能的实体
+    entities = re.findall(r'[\u4e00-\u9fff]{2,}|[a-zA-Z]{3,}', question)
+
+    # 3. 生成语义向量
+    model = st.session_state.embedding_model
+    embedding = model.encode([question])[0]
+
+    return {
+        "intent": intent,
+        "entities": entities,
+        "embedding": embedding
+    }
 
 
 # 删除文件处理
@@ -95,6 +163,9 @@ def delete_file(file_id):
 
     # 从知识库中删除相关片段
     st.session_state.knowledge_base = [kb for kb in st.session_state.knowledge_base if kb['source_id'] != file_id]
+
+    # 更新向量存储
+    update_vector_store()
 
 
 # 恢复已删除文件
@@ -123,6 +194,9 @@ def restore_file(file_id):
                 "content": chunk,
                 "type": file_to_restore['type'].split("/")[-1]
             })
+
+        # 更新向量存储
+        update_vector_store()
         return True
     return False
 
@@ -142,6 +216,14 @@ def toggle_file_tag(file_id, tag):
     return False
 
 
+# 更新向量存储
+def update_vector_store():
+    if st.session_state.embedding_model and st.session_state.knowledge_base:
+        model = st.session_state.embedding_model
+        contents = [kb["content"] for kb in st.session_state.knowledge_base]
+        st.session_state.knowledge_vectors = model.encode(contents)
+
+
 # 知识库管理界面（添加文件删除和标记功能）
 def knowledge_base_section():
     st.header("📚 知识库构建与管理")
@@ -154,6 +236,11 @@ def knowledge_base_section():
     )
 
     if uploaded_files:
+        # 确保嵌入模型已加载
+        if not st.session_state.embedding_model:
+            with st.spinner("加载语义模型..."):
+                st.session_state.embedding_model = load_embedding_model()
+
         # 处理新上传的文件
         for file in uploaded_files:
             # 检查是否已上传过相同内容的文件
@@ -183,6 +270,9 @@ def knowledge_base_section():
                                 "content": chunk,
                                 "type": file.type.split("/")[-1]
                             })
+
+        # 更新向量存储
+        update_vector_store()
         st.rerun()
 
     # 显示上传文件列表
@@ -281,9 +371,9 @@ def knowledge_base_section():
                     st.info(f"已显示3个文件的内容，共{len(source_files)}个文件")
 
 
-# 问答界面（保持不变）
+# 问答界面（添加语义理解功能）
 def qa_interface():
-    st.header("💬 智能问答系统")
+    st.header("💬 智能问答系统 (语义理解版)")
 
     # 显示历史对话
     if st.session_state.conversation:
@@ -299,27 +389,67 @@ def qa_interface():
     question = st.chat_input("请输入您的问题...")
 
     if question:
+        # 确保嵌入模型已加载
+        if not st.session_state.embedding_model:
+            with st.spinner("加载语义模型..."):
+                st.session_state.embedding_model = load_embedding_model()
+
         # 添加到对话历史
         st.session_state.conversation.append(f"用户: {question}")
 
         with st.chat_message(name="🕵️‍♂️ 用户"):
             st.write(question)
 
-        # 模拟检索和生成答案的过程
-        with st.spinner("正在思考并生成答案..."):
-            time.sleep(1)  # 模拟处理时间
+        # 语义分析处理
+        with st.spinner("正在分析问题语义..."):
+            semantic_info = semantic_analysis(question)
+            intent = semantic_info["intent"]
+            entities = semantic_info["entities"]
+            question_embedding = semantic_info["embedding"]
 
-            # 简化的检索过程
-            matching_chunks = []
-            for item in st.session_state.knowledge_base:
-                if any(word in item['content'] for word in question.split()[:3]):
-                    matching_chunks.append(item)
+        # 语义检索过程
+        with st.spinner("正在检索相关知识..."):
+            # 为知识库片段生成嵌入向量（如果尚未生成）
+            if st.session_state.knowledge_vectors.size == 0 and st.session_state.knowledge_base:
+                model = st.session_state.embedding_model
+                contents = [kb["content"] for kb in st.session_state.knowledge_base]
+                st.session_state.knowledge_vectors = model.encode(contents)
 
-            # 模拟生成答案
-            if matching_chunks:
-                answer = f"根据 **{matching_chunks[0]['source']}** 中的内容为您解答：\n\n"
-                answer += matching_chunks[0]['content'][:300] + "\n\n"
-                answer += "*(此为模拟回答，实际系统会结合上下文生成更自然的回答)*"
+            # 计算相似度
+            similarities = []
+            for idx, kb_vector in enumerate(st.session_state.knowledge_vectors):
+                similarity = cosine_similarity([question_embedding], [kb_vector])[0][0]
+                similarities.append((idx, similarity))
+
+            # 按相似度排序
+            similarities.sort(key=lambda x: x[1], reverse=True)
+
+            # 获取最相关的前3个片段
+            top_matches = []
+            for idx, score in similarities[:3]:
+                if score > 0.3:  # 设置相似度阈值
+                    top_matches.append(st.session_state.knowledge_base[idx])
+
+        # 生成答案
+        with st.spinner("正在生成答案..."):
+            if top_matches:
+                answer = f"### 问题分析\n"
+                answer += f"- **意图识别**: {intent}\n"
+                if entities:
+                    answer += f"- **关键实体**: {', '.join(entities)}\n"
+
+                answer += f"\n### 根据相关知识为您解答\n"
+                for i, match in enumerate(top_matches):
+                    answer += f"**来源 {i + 1}** ({match['source']}):\n"
+                    answer += f"> {match['content'][:200]}...\n\n"
+
+                # 根据不同意图添加额外信息
+                if intent == "比较分析":
+                    answer += "\n> *提示：如需详细比较分析，请提供更多具体信息*"
+                elif intent == "推荐建议":
+                    answer += "\n> *提示：以上为基于知识库的推荐，仅供参考*"
+                elif intent == "操作指导":
+                    answer += "\n> *提示：如需更详细的操作步骤指南，请补充具体场景信息*"
             else:
                 answer = "在知识库中未找到相关信息。请尝试重新表述您的问题或上传更多相关文档。"
 
@@ -328,7 +458,16 @@ def qa_interface():
 
             # 显示答案
             with st.chat_message(name="🤖 系统"):
-                st.write(answer)
+                st.markdown(answer)
+
+            # 调试信息
+            with st.expander("🔍 语义分析详情", expanded=False):
+                st.json({
+                    "问题意图": intent,
+                    "识别实体": entities,
+                    "匹配片段数": len(top_matches),
+                    "最高相似度": similarities[0][1] if similarities else 0
+                })
 
 
 # 主界面
@@ -340,8 +479,8 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    st.title("📚 基于RAG的智能问答系统")
-    st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与分析")
+    st.title("📚 基于语义理解的智能问答系统")
+    st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
 
     init_session()
 
@@ -363,8 +502,9 @@ def main():
         **系统功能：**
         1. 知识库构建与管理
         2. 文档解析与处理
-        3. 自然语言问答
-        4. 文件标记与回收
+        3. 语义分析与理解
+        4. 智能问答系统
+        5. 文件标记与回收
         """)
 
         # 数据管理选项
@@ -372,6 +512,7 @@ def main():
             st.session_state.uploaded_files = []
             st.session_state.knowledge_base = []
             st.session_state.conversation = []
+            st.session_state.knowledge_vectors = []
             st.rerun()
 
     # 根据选择显示对应页面
@@ -385,6 +526,7 @@ def main():
         st.json({
             "文件上传数": len(st.session_state.uploaded_files),
             "知识片段数": len(st.session_state.knowledge_base),
+            "向量存储数": len(st.session_state.knowledge_vectors),
             "删除文件数": len(st.session_state.deleted_files),
             "对话轮次": len(st.session_state.conversation) // 2
         })
