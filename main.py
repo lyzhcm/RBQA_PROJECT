@@ -108,21 +108,19 @@ def main():
         5. 文件标记与回收
         """)
         if st.button("清空所有数据", use_container_width=True, type="secondary"):
+            # 清空会话状态
             st.session_state.uploaded_files = []
             st.session_state.knowledge_base = []
             st.session_state.conversation = []
             st.session_state.knowledge_vectors = []
-            st.session_state.deleted_files = []
-            # 清空Chroma持久化目录
-            chroma_dir = "./chroma_db"
-            if os.path.exists(chroma_dir):
-                shutil.rmtree(chroma_dir)
-            os.makedirs(chroma_dir, exist_ok=True)
-            # 重新初始化向量数据库
+            
+            # 清空 ChromaDB 数据
+            st.session_state.vector_db.delete_collection() 
             st.session_state.vector_db = Chroma(
                 embedding_function=st.session_state.embedding_model_langchain,
-                persist_directory=chroma_dir
+                persist_directory="./chroma_db"
             )
+            
             st.rerun()
 
     if page == "知识库管理":
