@@ -56,21 +56,38 @@ def init_session():
         
         # 加载已注册文件到知识库
         for file_id, file_info in registry.items():
-            if Path(file_info["filepath"]).exists():
+            filepath = Path(file_info["filepath"])
+            if filepath.exists():
+                # 将文件信息添加到会话状态
                 st.session_state.uploaded_files.append({
                     "id": file_id,
                     "name": file_info["filename"],
                     "type": file_info["filename"].split(".")[-1],
-                    "local_path": file_info["filepath"],
+                    "local_path": str(filepath),
                     "upload_time": file_info["timestamp"],
                     "tags": ["持久化"]
                 })
                 
-                # 加载文件内容到知识库
-                with open(file_info["filepath"], "rb") as f:
+                # 加载文件内容并处理
+                with open(filepath, "rb") as f:
                     content = parse_file(f)
-                    if content:
-                        chunks = st.session_state.text_splitter.split_text(content)
+                
+                if content:
+                    # 检查向量数据库中是否已存在该文件的块
+                    existing_docs = st.session_state.vector_db.get(where={"source_id": file_id})
+                    
+                    # 无论是否存在于DB，都加载到内存知识库以供UI显示
+                    chunks = st.session_state.text_splitter.split_text(content)
+                    for chunk in chunks:
+                        st.session_state.knowledge_base.append({
+                            "source": file_info["filename"],
+                            "source_id": file_id,
+                            "content": chunk,
+                            "type": file_info["filename"].split(".")[-1]
+                        })
+
+                    # 如果DB中不存在，则添加入库
+                    if not (existing_docs and existing_docs.get('ids')):
                         metadatas = [{
                             "source": file_info["filename"],
                             "source_id": file_id,
@@ -78,20 +95,10 @@ def init_session():
                             "upload_time": file_info["timestamp"]
                         } for _ in chunks]
                         
-                        # 添加到向量数据库
                         st.session_state.vector_db.add_texts(
                             texts=chunks,
                             metadatas=metadatas
                         )
-                        
-                        # 添加到知识库
-                        for chunk in chunks:
-                            st.session_state.knowledge_base.append({
-                                "source": file_info["filename"],
-                                "source_id": file_id,
-                                "content": chunk,
-                                "type": file_info["filename"].split(".")[-1]
-                            })
 
 def clear_session():
     """清除会话和向量数据库"""
