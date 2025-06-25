@@ -26,11 +26,12 @@ def knowledge_base_section():
 
     if uploaded_files:
         # 处理新上传的文件
-        for file in uploaded_files:
-            add_file_to_knowledge_base(file)
+        with st.spinner("正在处理上传的文件..."):
+            for file in uploaded_files:
+                add_file_to_knowledge_base(file)
         
-        # Rerun to reflect changes immediately
-        st.rerun()
+        # 移除 st.rerun() 可防止页面闪烁，文件上传小部件会自动触发刷新
+        # st.rerun()
 
     # 显示上传文件列表
     st.subheader("文档管理")
@@ -109,11 +110,12 @@ def knowledge_base_section():
 
         # 查看知识库内容
         with st.container():  # 替换外层 Expander
+            st.subheader("🔍 查看知识库内容")
             if not st.session_state.knowledge_base:
-                st.info("知识库为空")
+                st.info("知识库为空，请先上传文档。")
             else:
                 source_files = set(kb['source_id'] for kb in st.session_state.knowledge_base)
-                for src_id in list(source_files)[:3]:
+                for src_id in list(source_files)[:3]:  # 最多显示前3个文件的内容
                     source_name = next(
                         kb['source'] for kb in st.session_state.knowledge_base if kb['source_id'] == src_id)
                     st.subheader(f"来源: {source_name}")

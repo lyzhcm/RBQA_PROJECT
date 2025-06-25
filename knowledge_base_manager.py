@@ -36,102 +36,110 @@ def semantic_analysis(question):
 
 # 新增文件到知识库
 def add_file_to_knowledge_base(file):
-    """Processes an uploaded file and adds it to the knowledge base and vector store."""
-    # 判断 file 是 UploadedFile 还是 Path
-    if hasattr(file, "getvalue"):
-        file_id = generate_file_id(file.getvalue())
-    elif isinstance(file, Path):
-        with open(file, "rb") as f:
-            file_id = generate_file_id(f.read())
-    else:
-        raise ValueError("不支持的文件类型")
+    """处理上传的文件，将其添加到知识库和向量存储中."""
+    # 1. 从文件内容生成唯一ID
+    file_content = file.getvalue()
+    file_id = generate_file_id(file_content)
 
-    # 检查文件是否已持久化注册
-    registry = FileRegistry.load()
-    if file_id in registry:
-        file_info = registry[file_id]
-        file_path = Path(file_info["filepath"])
-        with open(file_path, "rb") as f:
-            content = parse_file(f)
-    else:
-        content = parse_file(file)
-        save_uploaded_file(file, file_id)  # 保存到持久化存储
-
-    existing_file = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
-
-    if existing_file:
+    # 2. 检查文件是否已在当前会话中处理，防止重复
+    if any(f['id'] == file_id for f in st.session_state.uploaded_files):
         return
 
-    with st.spinner(f"解析文件: {file.name}..."):
-        content = parse_file(file)
-        if not content:
-            return
+    # 3. 解析文件内容
+    content = parse_file(file)
+    if not content:
+        st.warning(f"无法从文件 '{file.name}' 中提取文本内容，已跳过。")
+        return
 
-        st.session_state.uploaded_files.append({
-            "id": file_id,
-            "name": file.name,
-            "type": file.type,
-            "content": content,
-            "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "tags": ["新上传"]
-        })
+    # 4. 持久化保存文件并注册
+    save_uploaded_file(file, file_id)
 
-        chunks = st.session_state.text_splitter.split_text(content)
-        # 过滤掉空chunk
-        filtered = [(c, {
+    # 5. 将文件信息添加到会话状态以供UI显示
+    st.session_state.uploaded_files.append({
+        "id": file_id,
+        "name": file.name,
+        "type": file.type,
+        "content": content,  # 注意：在会话中存储完整内容可能消耗大量内存
+        "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tags": ["新上传"]
+    })
+
+    # 6. 对内容进行分块
+    chunks = st.session_state.text_splitter.split_text(content)
+    
+    # 过滤掉空块并准备元数据
+    filtered_data = [
+        (c, {
             "source": file.name,
             "source_id": file_id,
             "type": file.type.split("/")[-1],
             "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }) for c in chunks if c and isinstance(c, str) and c.strip() != ""]
-        if not filtered:
-            st.warning("未提取到有效文本片段，未入库。")
-            return
-        chunks, metadatas = zip(*filtered)
-        chunks = list(chunks)
-        metadatas = list(metadatas)
+        }) for c in chunks if c and isinstance(c, str) and c.strip()
+    ]
 
-        # 确保所有metadata字段为字符串
-        for m in metadatas:
-            for k, v in m.items():
-                if v is None:
-                    m[k] = ""
-                elif not isinstance(v, (str, int, float)):
-                    m[k] = str(v)
+    if not filtered_data:
+        st.warning(f"文件 '{file.name}' 未提取到有效文本片段，未存入知识库。")
+        return
+        
+    chunks, metadatas = zip(*filtered_data)
+    chunks, metadatas = list(chunks), list(metadatas)
 
-        db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
+    # 确保所有元数据字段都是ChromaDB接受的类型
+    for m in metadatas:
+        for k, v in m.items():
+            if v is None:
+                m[k] = ""
+            elif not isinstance(v, (str, int, float, bool)):
+                m[k] = str(v)
 
-        for chunk in chunks:
-            st.session_state.knowledge_base.append({
-                "source": file.name,
-                "source_id": file_id,
-                "content": chunk,
-                "type": file.type.split("/")[-1]
-            })
+    # 7. 将块和元数据添加到向量数据库
+    db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
+
+    # 8. 将块信息添加到会话状态知识库（用于UI显示）
+    for chunk in chunks:
+        st.session_state.knowledge_base.append({
+            "source": file.name,
+            "source_id": file_id,
+            "content": chunk,
+            "type": file.type.split("/")[-1]
+        })
 
 # 删除文件处理
 def delete_file(file_id):
-    """删除文件时同时清理持久化存储"""
+    """从所有地方（会话、持久化存储、向量数据库）删除文件."""
     file_to_delete = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
-    if file_to_delete:
-        try:
-            # 删除物理文件
-            if os.path.exists(file_to_delete['local_path']):
-                os.remove(file_to_delete['local_path'])
-            
-            # 移除注册信息
-            FileRegistry.remove_file(file_id)
-            
-            # 更新会话状态
-            st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f['id'] != file_id]
-            st.session_state.deleted_files.append({
-                **file_to_delete,
-                'deleted_time': datetime.now().isoformat()
-            })
-            return True
-        except Exception as e:
-            st.error(f"文件删除失败: {str(e)}")
-    return False
+    if not file_to_delete:
+        st.error("尝试删除一个不存在的文件。")
+        return False
+
+    try:
+        # 从注册表获取文件路径并删除物理文件
+        registry = FileRegistry.load()
+        file_info = registry.get(file_id)
+        if file_info and Path(file_info['filepath']).exists():
+            Path(file_info['filepath']).unlink()
+
+        # 从注册表移除记录
+        FileRegistry.remove_file(file_id)
+
+        # 从向量数据库删除
+        db_op.delete_from_db_by_source_id(file_id)
+
+        # 从会话状态更新
+        st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f['id'] != file_id]
+        st.session_state.knowledge_base = [kb for kb in st.session_state.knowledge_base if kb['source_id'] != file_id]
+        
+        # 移动到回收站
+        st.session_state.deleted_files.append({
+            **file_to_delete,
+            'deleted_time': datetime.now().isoformat()
+        })
+        
+        st.toast(f"文件 '{file_to_delete['name']}' 已移至回收站。")
+        return True
+    except Exception as e:
+        st.error(f"文件删除失败: {str(e)}")
+        return False
 
 # 恢复已删除文件
 def restore_file(file_id):
