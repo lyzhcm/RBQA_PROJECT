@@ -87,3 +87,4 @@ venv/
 ENV/
 env/
 file_registry.json
+*.json
