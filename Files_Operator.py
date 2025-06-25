@@ -10,7 +10,6 @@ import hashlib
 import re
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-from sentence_transformers import SentenceTransformer
 
 def parse_file(file):
     """解析上传的文件内容"""
@@ -79,14 +78,6 @@ def split_into_chunks(text, chunk_size=200):
 # 生成文件唯一ID
 def generate_file_id(file_content):
     return hashlib.md5(file_content).hexdigest()
-
-
-
-# 加载嵌入模型（缓存避免重复加载）
-@st.cache_resource
-def load_embedding_model():
-    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
 
 # 示例用法
 # reader = Reader()

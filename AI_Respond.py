@@ -1,10 +1,11 @@
 import openai
 import streamlit as st
+from config import API_KEY, API_BASE_URL, DEEPSEEK_MODEL
 
-openai.api_key = "sk-g40Ua40lLiQhMcEN1b710a5d63E14bD89921Ed47D8B371Fb"
-openai.base_url = "https://api.gpt.ge/v1/"
+openai.api_key = API_KEY
+openai.base_url = API_BASE_URL
 
-def ask_ai(question, model="deepseek-chat"):
+def ask_ai(question, model=DEEPSEEK_MODEL):
     """调用DeepSeek AI接口"""
     try:
         completion = openai.chat.completions.create(

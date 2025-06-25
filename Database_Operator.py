@@ -1,6 +1,8 @@
 import re
 import streamlit as st
 from datetime import datetime
+from Files_Operator import parse_file, generate_file_id
+import vector_db_operator as db_op
 
 # 语义分析函数
 def semantic_analysis(question):
@@ -29,6 +31,46 @@ def semantic_analysis(question):
         "embedding": embedding
     }
 
+# 新增文件到知识库
+def add_file_to_knowledge_base(file):
+    """Processes an uploaded file and adds it to the knowledge base and vector store."""
+    file_id = generate_file_id(file.getvalue())
+    existing_file = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
+
+    if existing_file:
+        return
+
+    with st.spinner(f"解析文件: {file.name}..."):
+        content = parse_file(file)
+        if not content:
+            return
+
+        st.session_state.uploaded_files.append({
+            "id": file_id,
+            "name": file.name,
+            "type": file.type,
+            "content": content,
+            "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "tags": ["新上传"]
+        })
+
+        chunks = st.session_state.text_splitter.split_text(content)
+        metadatas = [{
+            "source": file.name,
+            "source_id": file_id,
+            "type": file.type.split("/")[-1],
+            "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        } for _ in chunks]
+        db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
+
+        for chunk in chunks:
+            st.session_state.knowledge_base.append({
+                "source": file.name,
+                "source_id": file_id,
+                "content": chunk,
+                "type": file.type.split("/")[-1]
+            })
+
 # 删除文件处理
 def delete_file(file_id):
     # 从已上传文件中删除
@@ -42,8 +84,8 @@ def delete_file(file_id):
         })
         # 从知识库中删除相关片段
         st.session_state.knowledge_base = [kb for kb in st.session_state.knowledge_base if kb['source_id'] != file_id]
-        # 更新向量存储
-        update_vector_store()
+        # 从向量存储中删除
+        db_op.delete_from_db_by_source_id(file_id)
         return True
     return False
 
@@ -62,21 +104,26 @@ def restore_file(file_id):
         })
         # 从删除列表中移除
         st.session_state.deleted_files = [f for f in st.session_state.deleted_files if f['id'] != file_id]
-        # 重新添加到知识库
-        if "text_splitter" in st.session_state:
-            chunks = st.session_state.text_splitter.split_text(file_to_restore['content'])
-        else:
-            # 兜底：简单按段落分割
-            chunks = file_to_restore['content'].split('\n\n')
+        
+        # 重新分块并添加到知识库和向量数据库
+        content = file_to_restore['content']
+        chunks = st.session_state.text_splitter.split_text(content)
+        
+        metadatas = [{
+            "source": file_to_restore['name'],
+            "source_id": file_id,
+            "type": file_to_restore['type'].split("/")[-1],
+            "upload_time": file_to_restore['upload_time']
+        } for _ in chunks]
+        db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
+
         for chunk in chunks:
             st.session_state.knowledge_base.append({
                 "source": file_to_restore['name'],
-                "source_id": file_to_restore['id'],
+                "source_id": file_id,
                 "content": chunk,
                 "type": file_to_restore['type'].split("/")[-1]
             })
-        # 更新向量存储
-        update_vector_store()
         return True
     return False
 
@@ -92,10 +139,3 @@ def toggle_file_tag(file_id, tag):
                 file['tags'].append(tag)
             return True
     return False
-
-# 更新向量存储
-def update_vector_store():
-    if st.session_state.embedding_model and st.session_state.knowledge_base:
-        model = st.session_state.embedding_model
-        contents = [kb["content"] for kb in st.session_state.knowledge_base]
-        st.session_state.knowledge_vectors = model.encode(contents)

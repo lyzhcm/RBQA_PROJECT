@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-from Files_Operator import parse_file, generate_file_id, load_embedding_model
 from Database_Operator import (
     delete_file,
     restore_file,
     toggle_file_tag,
     semantic_analysis,
-    update_vector_store
+    add_file_to_knowledge_base
 )
 from AI_Respond import ask_ai
+import vector_db_operator as db_op
 
 # 知识库管理界面
 def knowledge_base_section():
@@ -24,56 +24,11 @@ def knowledge_base_section():
     )
 
     if uploaded_files:
-        # 确保嵌入模型已加载
-        if not st.session_state.embedding_model:
-            with st.spinner("加载语义模型..."):
-                st.session_state.embedding_model = load_embedding_model()
-
         # 处理新上传的文件
         for file in uploaded_files:
-            # 检查是否已上传过相同内容的文件
-            file_id = generate_file_id(file.getvalue())
-            existing_file = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
-
-            if not existing_file:
-                with st.spinner(f"解析文件: {file.name}..."):
-                    content = parse_file(file)
-
-                    if content:
-                        st.session_state.uploaded_files.append({
-                            "id": file_id,
-                            "name": file.name,
-                            "type": file.type,
-                            "content": content,
-                            "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "tags": ["新上传"]  # 默认标记
-                        })
-
-                        # 分割内容为知识片段
-                        chunks = st.session_state.text_splitter.split_text(content)
-                        
-                        # 存储到向量数据库
-                        st.session_state.vector_db.add_texts(
-                            texts=chunks,
-                            metadatas=[{
-                                "source": file.name,
-                                "source_id": file_id,
-                                "type": file.type.split("/")[-1],
-                                "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            } for _ in chunks]
-                        )
-
-                        # 保留到知识库
-                        for i, chunk in enumerate(chunks):
-                            st.session_state.knowledge_base.append({
-                                "source": file.name,
-                                "source_id": file_id,
-                                "content": chunk,
-                                "type": file.type.split("/")[-1]
-                            })
-
-        # 更新向量存储
-        update_vector_store()
+            add_file_to_knowledge_base(file)
+        
+        # Rerun to reflect changes immediately
         st.rerun()
 
     # 显示上传文件列表
@@ -194,7 +149,7 @@ def qa_interface():
             question_embedding = semantic_info["embedding"]
 
         # 2. 向量检索
-        docs = st.session_state.vector_db.similarity_search(question, k=3)
+        docs = db_op.search_db(question, k=3)
 
         # 3. 构建科学问答提示词
         context = "\n".join([
