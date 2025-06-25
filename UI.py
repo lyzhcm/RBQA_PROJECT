@@ -128,7 +128,7 @@ def knowledge_base_section():
 
 # 问答界面（结合语义理解和DeepSeek）
 def qa_interface():
-    st.header("💬 智能问答系统")
+    st.header("💬💬 智能问答系统")
 
     # 显示对话历史
     if st.session_state.conversation:
@@ -140,18 +140,46 @@ def qa_interface():
     # 用户提问处理
     if question := st.chat_input("请输入您的问题..."):
         st.session_state.conversation.append(f"用户: {question}")
+        
+        # 1. 上下文分析 - 检查是否与上一个问题相关
+        context_analysis = ""
+        if len(st.session_state.conversation) >= 2:
+            last_question = st.session_state.conversation[-2]
+            if last_question.startswith("用户:"):
+                last_question = last_question.split(":", 1)[1].strip()
+                
+                # 计算当前问题与上一个问题的语义相似度
+                model = st.session_state.embedding_model
+                last_embedding = model.encode([last_question])[0]
+                current_embedding = model.encode([question])[0]
+                
+                # 使用余弦相似度
+                from numpy import dot
+                from numpy.linalg import norm
+                similarity = dot(last_embedding, current_embedding)/(norm(last_embedding)*norm(current_embedding))
+                
+                if similarity > 0.7:  # 相似度阈值
+                    context_analysis = f"\n注意：这个问题与上一个问题高度相关（相似度{similarity:.2f}），请考虑上下文回答。"
+                    # 获取上一个问题的回答
+                    last_answer = ""
+                    if len(st.session_state.conversation) >= 3:
+                        last_answer_msg = st.session_state.conversation[-3]
+                        if last_answer_msg.startswith("系统:"):
+                            last_answer = last_answer_msg.split(":", 1)[1].strip()
+                    
+                    context_analysis += f"\n上一个问题: {last_question}\n上一个回答: {last_answer}"
 
-        # 1. 语义分析处理
+        # 2. 语义分析处理
         with st.spinner("正在分析问题语义..."):
             semantic_info = semantic_analysis(question)
             intent = semantic_info["intent"]
             entities = semantic_info["entities"]
             question_embedding = semantic_info["embedding"]
 
-        # 2. 向量检索
+        # 3. 向量检索
         docs = db_op.search_db(question, k=3)
 
-        # 3. 构建科学问答提示词
+        # 4. 构建科学问答提示词（增强上下文）
         context = "\n".join([
             f"【文献 {i + 1}】{doc.metadata['source']}\n{doc.page_content}\n"
             for i, doc in enumerate(docs)
@@ -160,15 +188,18 @@ def qa_interface():
         prompt = f"""根据以下文献内容回答问题：
 {context}
 问题：{question}
+{context_analysis}
 要求：
 1. 回答需引用文献（例：【文献1】）
 2. 保持学术严谨性
 3. 如无相关信息请说明
 4. 问题意图：{intent}
 5. 关键实体：{', '.join(entities)}
+6. 考虑以下对话历史：
+{'\n'.join([msg for msg in st.session_state.conversation[-6:] if not msg.startswith('系统:')])}
 回答："""
 
-        # 4. 调用DeepSeek生成
+        # 5. 调用DeepSeek生成
         with st.chat_message("assistant"):
             with st.spinner("正在生成回答..."):
                 answer = ask_ai(prompt)
@@ -176,19 +207,19 @@ def qa_interface():
                 st.session_state.conversation.append(f"系统: {answer}")
 
             # 显示参考文献
-            with st.expander("📚 参考文档", expanded=False):
+            with st.expander("📚📚 参考文档", expanded=False):
                 for i, doc in enumerate(docs, 1):
-                    # 兼容无metadata或无source的情况
                     source = getattr(doc, "metadata", {}).get("source", getattr(doc, "source", f"文档{i}"))
                     content = getattr(doc, "page_content", str(doc))[:200] + "..."
                     st.caption(f"【文献{i}】{source}")
                     st.text(content)
 
             # 显示语义分析详情
-            with st.expander("🔍 语义分析详情", expanded=False):
+            with st.expander("🔍🔍 语义分析详情", expanded=False):
                 st.json({
                     "问题意图": intent,
                     "识别实体": entities,
                     "匹配片段数": len(docs),
+                    "上下文关联度": f"{similarity:.2f}" if 'similarity' in locals() else "无",
                     "提示词": prompt[:500] + "..." if len(prompt) > 500 else prompt
                 })
