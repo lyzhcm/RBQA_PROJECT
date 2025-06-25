@@ -186,6 +186,9 @@ def qa_interface():
             for i, doc in enumerate(docs)
         ])
 
+        # 先处理对话历史
+        history = '\n'.join([msg for msg in st.session_state.conversation[-6:] if not msg.startswith('系统:')])
+
         prompt = f"""根据以下文献内容回答问题：
 {context}
 问题：{question}
@@ -197,7 +200,7 @@ def qa_interface():
 4. 问题意图：{intent}
 5. 关键实体：{', '.join(entities)}
 6. 考虑以下对话历史：
-{'\n'.join([msg for msg in st.session_state.conversation[-6:] if not msg.startswith('系统:')])}
+{history}
 回答："""
 
         # 5. 调用DeepSeek生成
