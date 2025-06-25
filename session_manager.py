@@ -50,8 +50,11 @@ def init_session():
         st.session_state.vector_db = get_vector_db()
     
     # 从持久化存储加载文件
-    if "uploaded_files" not in st.session_state:
+    # 此逻辑仅在会话中尚未填充文件列表时运行。
+    # 这能处理初次启动和会话清除后的重新加载。
+    if "uploaded_files" not in st.session_state or not st.session_state.uploaded_files:
         st.session_state.uploaded_files = []
+        st.session_state.knowledge_base = []  # 重置以防止重复加载
         registry = FileRegistry.load()
         
         # 加载已注册文件到知识库
