@@ -1,4 +1,5 @@
 chroma_db/
+persistent_uploads/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
