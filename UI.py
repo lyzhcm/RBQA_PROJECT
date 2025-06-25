@@ -108,24 +108,21 @@ def knowledge_base_section():
                     st.rerun()
 
         # 查看知识库内容
-        with st.expander("🔍 查看知识库内容", expanded=False):
+        with st.container():  # 替换外层 Expander
             if not st.session_state.knowledge_base:
-                st.warning("知识库为空，请先上传文档。")
-                return
-            # 分组显示按文件
-            source_files = set(kb['source_id'] for kb in st.session_state.knowledge_base)
-            for src_id in list(source_files)[:3]:  # 最多显示前3个文件的内容
-                source_name = next(
-                    kb['source'] for kb in st.session_state.knowledge_base if kb['source_id'] == src_id)
-                st.subheader(f"来源: {source_name}")
-
-                # 显示该文件的前3个片段
-                for kb in [k for k in st.session_state.knowledge_base if k['source_id'] == src_id][:3]:
-                    with st.expander(f"知识片段 {kb['content'][:30]}...", expanded=False):
-                        st.markdown(kb["content"])
-                st.divider()
-            if len(source_files) > 3:
-                st.info(f"已显示3个文件的内容，共{len(source_files)}个文件")
+                st.info("知识库为空")
+            else:
+                source_files = set(kb['source_id'] for kb in st.session_state.knowledge_base)
+                for src_id in list(source_files)[:3]:
+                    source_name = next(
+                        kb['source'] for kb in st.session_state.knowledge_base if kb['source_id'] == src_id)
+                    st.subheader(f"来源: {source_name}")
+                    for kb in [k for k in st.session_state.knowledge_base if k['source_id'] == src_id][:3]:
+                        with st.expander(f"知识片段 {kb['content'][:30]}...", expanded=False):
+                            st.markdown(kb["content"])
+                    st.divider()
+                if len(source_files) > 3:
+                    st.info(f"已显示3个文件的内容，共{len(source_files)}个文件")
 
 # 问答界面（结合语义理解和DeepSeek）
 def qa_interface():
