@@ -1,7 +1,7 @@
 import streamlit as st
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
-from vector_db_operator import get_vector_db, clear_db
+from vector_store import get_vector_db, clear_db
 from config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL_SENTENCE_TRANSFORMER
 
 def init_session():

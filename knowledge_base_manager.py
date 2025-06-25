@@ -1,8 +1,8 @@
 import re
 import streamlit as st
 from datetime import datetime
-from Files_Operator import parse_file, generate_file_id
-import vector_db_operator as db_op
+from file_parser import parse_file, generate_file_id
+import vector_store as db_op
 
 # 语义分析函数
 def semantic_analysis(question):

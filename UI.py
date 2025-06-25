@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-from Database_Operator import (
+from knowledge_base_manager import (
     delete_file,
     restore_file,
     toggle_file_tag,
     semantic_analysis,
     add_file_to_knowledge_base
 )
-from AI_Respond import ask_ai
-import vector_db_operator as db_op
+from ai_service import ask_ai
+import vector_store as db_op
 
 # 知识库管理界面
 def knowledge_base_section():
