@@ -13,25 +13,34 @@ from knowledge_base_manager import (
 from ai_service import ask_ai
 import vector_store as db_op
 
+def _process_files_callback():
+    """
+    当文件上传时调用的回调函数。
+    它在下一次UI重新渲染之前处理文件，确保状态同步。
+    """
+    # 通过key从会话状态获取上传的文件
+    uploaded_files = st.session_state.get("knowledge_file_uploader")
+    if not uploaded_files:
+        return
+
+    # 在处理文件时显示加载指示器
+    with st.spinner("正在处理上传的文件..."):
+        for file in uploaded_files:
+            add_file_to_knowledge_base(file)
+
 # 知识库管理界面
 def knowledge_base_section():
     st.header("📚 知识库构建与管理")
 
     # 文件上传区域
-    uploaded_files = st.file_uploader(
+    # 使用on_change回调来处理文件，而不是在UI渲染流程中处理
+    st.file_uploader(
         "上传知识文档 (支持多种格式)",
         type=["txt", "pdf", "docx", "pptx", "md"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="knowledge_file_uploader",  # 为小部件提供一个唯一的key
+        on_change=_process_files_callback # 绑定回调函数
     )
-
-    if uploaded_files:
-        # 处理新上传的文件
-        with st.spinner("正在处理上传的文件..."):
-            for file in uploaded_files:
-                add_file_to_knowledge_base(file)
-        
-        # 重新运行以确保在处理文件后UI（包括侧边栏指标）完全更新
-        st.rerun()
 
     # 显示上传文件列表
     st.subheader("文档管理")
