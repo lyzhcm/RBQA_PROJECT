@@ -85,3 +85,4 @@ Desktop.ini
 venv/
 ENV/
 env/
+file_registry.json
