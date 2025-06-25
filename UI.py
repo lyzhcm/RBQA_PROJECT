@@ -30,8 +30,8 @@ def knowledge_base_section():
             for file in uploaded_files:
                 add_file_to_knowledge_base(file)
         
-        # 移除 st.rerun() 可防止页面闪烁，文件上传小部件会自动触发刷新
-        # st.rerun()
+        # 重新运行以确保在处理文件后UI（包括侧边栏指标）完全更新
+        st.rerun()
 
     # 显示上传文件列表
     st.subheader("文档管理")
