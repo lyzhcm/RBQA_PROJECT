@@ -1,9 +1,12 @@
+#knowledge_base_manager
 import re
 import streamlit as st
 from datetime import datetime
-from file_parser import parse_file, generate_file_id
+from file_parser import parse_file, generate_file_id,save_uploaded_file
 import vector_store as db_op
-
+import os
+from file_registry import FileRegistry
+from pathlib import Path
 # 语义分析函数
 def semantic_analysis(question):
     # 1. 意图识别
@@ -35,6 +38,15 @@ def semantic_analysis(question):
 def add_file_to_knowledge_base(file):
     """Processes an uploaded file and adds it to the knowledge base and vector store."""
     file_id = generate_file_id(file.getvalue())
+     # 检查文件是否已持久化注册
+    registry = FileRegistry.load()
+    if file_id in registry:
+        file_info = registry[file_id]
+        content = parse_file(Path(file_info["filepath"]))  # 从磁盘重新加载内容
+    else:
+        content = parse_file(file)
+        save_uploaded_file(file, file_id)  # 保存到持久化存储
+
     existing_file = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
 
     if existing_file:
@@ -61,6 +73,8 @@ def add_file_to_knowledge_base(file):
             "type": file.type.split("/")[-1],
             "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         } for _ in chunks]
+        print(f"chunks: {len(chunks)}, metadatas: {len(metadatas)}")
+        assert len(chunks) == len(metadatas), "chunks和metadatas长度不一致"
         db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
 
         for chunk in chunks:
@@ -73,20 +87,26 @@ def add_file_to_knowledge_base(file):
 
 # 删除文件处理
 def delete_file(file_id):
-    # 从已上传文件中删除
+    """删除文件时同时清理持久化存储"""
     file_to_delete = next((f for f in st.session_state.uploaded_files if f['id'] == file_id), None)
     if file_to_delete:
-        st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f['id'] != file_id]
-        # 添加到删除的文件列表（用于恢复）
-        st.session_state.deleted_files.append({
-            **file_to_delete,
-            'deleted_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-        # 从知识库中删除相关片段
-        st.session_state.knowledge_base = [kb for kb in st.session_state.knowledge_base if kb['source_id'] != file_id]
-        # 从向量存储中删除
-        db_op.delete_from_db_by_source_id(file_id)
-        return True
+        try:
+            # 删除物理文件
+            if os.path.exists(file_to_delete['local_path']):
+                os.remove(file_to_delete['local_path'])
+            
+            # 移除注册信息
+            FileRegistry.remove_file(file_id)
+            
+            # 更新会话状态
+            st.session_state.uploaded_files = [f for f in st.session_state.uploaded_files if f['id'] != file_id]
+            st.session_state.deleted_files.append({
+                **file_to_delete,
+                'deleted_time': datetime.now().isoformat()
+            })
+            return True
+        except Exception as e:
+            st.error(f"文件删除失败: {str(e)}")
     return False
 
 # 恢复已删除文件
@@ -115,6 +135,8 @@ def restore_file(file_id):
             "type": file_to_restore['type'].split("/")[-1],
             "upload_time": file_to_restore['upload_time']
         } for _ in chunks]
+        print(f"chunks: {len(chunks)}, metadatas: {len(metadatas)}")
+        assert len(chunks) == len(metadatas), "chunks和metadatas长度不一致"
         db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
 
         for chunk in chunks:

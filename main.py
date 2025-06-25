@@ -1,10 +1,14 @@
+#main
 import streamlit as st
 import pandas as pd
 import os
 import time
 from UI import knowledge_base_section, qa_interface
+from file_registry import FileRegistry
 from session_manager import init_session, clear_session
-
+from config import PERSISTENT_UPLOAD_FOLDER
+def init_app():
+    os.makedirs(PERSISTENT_UPLOAD_FOLDER, exist_ok=True)
 def main():
     st.set_page_config(
         page_title="智能文献问答系统",

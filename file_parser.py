@@ -1,3 +1,4 @@
+#file_parser
 import os
 import json
 import pandas as pd
@@ -10,7 +11,38 @@ import hashlib
 import re
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from file_registry import FileRegistry
+from config import PERSISTENT_UPLOAD_FOLDER
+from pathlib import Path
+from werkzeug.utils import secure_filename
+import nltk
 
+# 下载nltk资源
+try:
+    nltk.data.find('tokenizers/punkt')
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('punkt')
+    nltk.download('stopwords')
+
+def save_uploaded_file(file, file_id):
+    """持久化保存文件"""
+    try:
+        # 确保文件名安全且唯一
+        safe_name = f"{file_id}_{secure_filename(file.name)}"
+        save_path = os.path.join(PERSISTENT_UPLOAD_FOLDER, safe_name)
+        
+        # 保存文件
+        with open(save_path, "wb") as f:
+            f.write(file.getbuffer())
+            
+        # 注册文件
+        FileRegistry.add_file(file_id, file.name, save_path)
+        return save_path
+    except Exception as e:
+        st.error(f"文件保存失败: {str(e)}")
+        return None
+    
 def parse_file(file):
     """解析上传的文件内容"""
     content = ""
@@ -51,8 +83,11 @@ def parse_file(file):
         st.error(f"解析文件时出错: {str(e)}")
         return None
     
-# 文本预处理函数
 def preprocess_text(text):
+    """文本预处理"""
+    if not text:
+        return ""
+    
     # 转换为小写
     text = text.lower()
     # 移除特殊字符和数字
@@ -64,8 +99,11 @@ def preprocess_text(text):
     tokens = [word for word in tokens if word not in stop_words]
     return " ".join(tokens)
 
-# 将文档内容分割为适合处理的片段
 def split_into_chunks(text, chunk_size=200):
+    """将文本分割为块"""
+    if not text:
+        return []
+    
     chunks = []
     words = text.split()
 
@@ -74,12 +112,6 @@ def split_into_chunks(text, chunk_size=200):
 
     return chunks
 
-
-# 生成文件唯一ID
 def generate_file_id(file_content):
+    """生成文件唯一ID"""
     return hashlib.md5(file_content).hexdigest()
-
-# 示例用法
-# reader = Reader()
-# content = reader.read('example.txt')
-# print(content)

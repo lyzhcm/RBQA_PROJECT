@@ -1,7 +1,8 @@
+#ui
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-
+from file_registry import FileRegistry
 from knowledge_base_manager import (
     delete_file,
     restore_file,
@@ -40,7 +41,7 @@ def knowledge_base_section():
             "ID": f["id"],
             "文件名": f["name"],
             "类型": f["type"],
-            "大小": f"{len(f['content']) // 1024} KB",
+            "大小": f"{len(f['content']) // 1024} KB" if f.get('content') else "未知",
             "上传时间": f["upload_time"],
             "标记": ", ".join(f.get("tags", [])) if "tags" in f else "",
         }
