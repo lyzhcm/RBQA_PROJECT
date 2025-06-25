@@ -7,6 +7,7 @@ from UI import knowledge_base_section, qa_interface
 from file_registry import FileRegistry
 from session_manager import init_session, clear_session
 from config import PERSISTENT_UPLOAD_FOLDER
+from vector_store import get_vector_count
 def init_app():
     os.makedirs(PERSISTENT_UPLOAD_FOLDER, exist_ok=True)
 def main():
@@ -70,11 +71,12 @@ def main():
         st.json({
             "文件上传数": len(st.session_state.uploaded_files),
             "知识片段数": len(st.session_state.knowledge_base),
-            "向量存储数": st.session_state.vector_db._collection.count() if "vector_db" in st.session_state and st.session_state.vector_db._collection is not None else 0,
+            "向量存储数": get_vector_count(),
             "删除文件数": len(st.session_state.deleted_files),
             "对话轮次": len(st.session_state.conversation) // 2
         })
 
 
 if __name__ == "__main__":
+    st.cache_resource.clear()
     main()

@@ -17,10 +17,18 @@ def get_embedding_function():
 def get_vector_db():
     """初始化并返回ChromaDB实例"""
     embedding_function = get_embedding_function()
-    return Chroma(
-        embedding_function=embedding_function,
-        persist_directory=CHROMA_DB_PATH
-    )
+    try:
+        return Chroma(
+            embedding_function=embedding_function,
+            persist_directory=CHROMA_DB_PATH
+        )
+    except Exception as e:
+        # 尝试清理缓存并重建
+        st.cache_resource.clear()
+        return Chroma(
+            embedding_function=embedding_function,
+            persist_directory=CHROMA_DB_PATH
+        )
 
 def add_texts_to_db(texts: List[str], metadatas: List[Dict]):
     """添加文本和元数据到向量数据库"""
@@ -35,7 +43,11 @@ def add_texts_to_db(texts: List[str], metadatas: List[Dict]):
 def search_db(query: str, k: int = 3) -> List:
     """在向量数据库中执行相似性搜索"""
     db = get_vector_db()
-    return db.similarity_search(query, k=k)
+    try:
+        return db.similarity_search(query, k=k)
+    except Exception as e:
+        st.error(f"知识库检索失败: {str(e)}")
+        return []
 
 def delete_from_db_by_source_id(source_id: str):
     """根据source_id元数据删除向量"""
@@ -46,10 +58,11 @@ def clear_db():
     """清空向量数据库集合"""
     db = get_vector_db()
     db.delete_collection()
-    
     # 重置会话状态
     if "vector_db" in st.session_state:
         del st.session_state.vector_db
+    # 清理 Streamlit 资源缓存，防止 collection id 失效
+    st.cache_resource.clear()
 
 def load_existing_documents() -> Optional[List[Dict]]:
     """加载向量数据库中现有的文档"""
@@ -62,3 +75,16 @@ def load_existing_documents() -> Optional[List[Dict]]:
     except Exception as e:
         st.error(f"加载现有文档失败: {str(e)}")
         return None
+
+def get_vector_count():
+    """安全获取向量数据库的条目数"""
+    try:
+        db = get_vector_db()
+        if hasattr(db, "collection") and hasattr(db.collection, "count"):
+            return db.collection.count()
+        elif hasattr(db, "_collection") and hasattr(db._collection, "count"):
+            return db._collection.count()
+        else:
+            return 0
+    except Exception as e:
+        return 0

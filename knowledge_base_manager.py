@@ -37,12 +37,22 @@ def semantic_analysis(question):
 # 新增文件到知识库
 def add_file_to_knowledge_base(file):
     """Processes an uploaded file and adds it to the knowledge base and vector store."""
-    file_id = generate_file_id(file.getvalue())
-     # 检查文件是否已持久化注册
+    # 判断 file 是 UploadedFile 还是 Path
+    if hasattr(file, "getvalue"):
+        file_id = generate_file_id(file.getvalue())
+    elif isinstance(file, Path):
+        with open(file, "rb") as f:
+            file_id = generate_file_id(f.read())
+    else:
+        raise ValueError("不支持的文件类型")
+
+    # 检查文件是否已持久化注册
     registry = FileRegistry.load()
     if file_id in registry:
         file_info = registry[file_id]
-        content = parse_file(Path(file_info["filepath"]))  # 从磁盘重新加载内容
+        file_path = Path(file_info["filepath"])
+        with open(file_path, "rb") as f:
+            content = parse_file(f)
     else:
         content = parse_file(file)
         save_uploaded_file(file, file_id)  # 保存到持久化存储
@@ -67,14 +77,28 @@ def add_file_to_knowledge_base(file):
         })
 
         chunks = st.session_state.text_splitter.split_text(content)
-        metadatas = [{
+        # 过滤掉空chunk
+        filtered = [(c, {
             "source": file.name,
             "source_id": file_id,
             "type": file.type.split("/")[-1],
             "upload_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        } for _ in chunks]
-        print(f"chunks: {len(chunks)}, metadatas: {len(metadatas)}")
-        assert len(chunks) == len(metadatas), "chunks和metadatas长度不一致"
+        }) for c in chunks if c and isinstance(c, str) and c.strip() != ""]
+        if not filtered:
+            st.warning("未提取到有效文本片段，未入库。")
+            return
+        chunks, metadatas = zip(*filtered)
+        chunks = list(chunks)
+        metadatas = list(metadatas)
+
+        # 确保所有metadata字段为字符串
+        for m in metadatas:
+            for k, v in m.items():
+                if v is None:
+                    m[k] = ""
+                elif not isinstance(v, (str, int, float)):
+                    m[k] = str(v)
+
         db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
 
         for chunk in chunks:
@@ -135,8 +159,6 @@ def restore_file(file_id):
             "type": file_to_restore['type'].split("/")[-1],
             "upload_time": file_to_restore['upload_time']
         } for _ in chunks]
-        print(f"chunks: {len(chunks)}, metadatas: {len(metadatas)}")
-        assert len(chunks) == len(metadatas), "chunks和metadatas长度不一致"
         db_op.add_texts_to_db(texts=chunks, metadatas=metadatas)
 
         for chunk in chunks:
