@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 from UI import knowledge_base_section, qa_interface
 from session_manager import init_session, clear_session
 
@@ -13,10 +14,26 @@ def main():
     )
 
     # Session state is initialized once, including models.
-    init_session()
+    progress_container = st.empty()
 
-    st.title("📚 智能文献问答系统")
-    st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
+    # 步骤1: 初始化会话状态
+    with progress_container.container():
+        st.subheader("🚀 系统初始化中...")
+        init_progress = st.progress(0, text="准备系统环境")
+        init_session()  # 您的初始化函数
+        init_progress.progress(30, text="加载AI模型")
+
+    # 步骤2: 渲染主界面
+    with progress_container.container():
+        init_progress.progress(60, text="构建用户界面")
+        st.title("📚 智能文献问答系统")
+        st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
+
+    # 步骤3: 完成初始化
+    with progress_container.container():
+        init_progress.progress(100, text="准备就绪！")
+        time.sleep(0.5)  # 让用户看到完成状态
+        progress_container.empty()  # 隐藏进度条容器
 
     with st.sidebar:
         st.header("🔍 导航菜单")
