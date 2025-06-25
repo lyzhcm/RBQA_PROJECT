@@ -61,20 +61,22 @@ def init_session():
         for file_id, file_info in registry.items():
             filepath = Path(file_info["filepath"])
             if filepath.exists():
-                # 将文件信息添加到会话状态
+                # 1. 首先加载并解析文件内容
+                with open(filepath, "rb") as f:
+                    content = parse_file(f, original_filename=file_info["filename"])
+
+                # 2. 将包含完整内容的文件信息添加到会话状态
                 st.session_state.uploaded_files.append({
                     "id": file_id,
                     "name": file_info["filename"],
                     "type": file_info["filename"].split(".")[-1],
                     "local_path": str(filepath),
                     "upload_time": file_info["timestamp"],
-                    "tags": ["持久化"]
+                    "tags": ["持久化"],
+                    "content": content or ""  # 确保content键存在
                 })
                 
-                # 加载文件内容并处理
-                with open(filepath, "rb") as f:
-                    content = parse_file(f)
-                
+                # 3. 如果成功解析出内容，则继续处理知识片段
                 if content:
                     # 检查向量数据库中是否已存在该文件的块
                     existing_docs = st.session_state.vector_db.get(where={"source_id": file_id})

@@ -43,10 +43,9 @@ def main():
         page = st.radio("选择功能", ["知识库管理", "智能问答"], horizontal=True)
         st.divider()
         st.subheader("📊 系统概览")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         col1.metric("知识文档", len(st.session_state.get("uploaded_files", [])))
-        col2.metric("知识片段", len(st.session_state.get("knowledge_base", [])))
-        col3.metric("回收站", len(st.session_state.get("deleted_files", [])))
+        col2.metric("回收站", len(st.session_state.get("deleted_files", [])))
         st.divider()
         st.info("""
         **系统功能：**
@@ -71,7 +70,6 @@ def main():
     with st.expander("🛠️ 调试信息", expanded=False):
         st.json({
             "文件上传数": len(st.session_state.get("uploaded_files", [])),
-            "知识片段数": len(st.session_state.get("knowledge_base", [])),
             "向量存储数": get_vector_count(),
             "删除文件数": len(st.session_state.get("deleted_files", [])),
             "对话轮次": len(st.session_state.get("conversation", [])) if isinstance(st.session_state.get("conversation"), list) else 0
