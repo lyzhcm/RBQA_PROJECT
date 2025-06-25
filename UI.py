@@ -131,65 +131,74 @@ def knowledge_base_section():
 def qa_interface():
     st.header("💬💬 智能问答系统")
 
-    # 显示对话历史
-    if st.session_state.conversation:
-        for msg in st.session_state.conversation:
-            role = "user" if msg.startswith("用户:") else "assistant"
-            with st.chat_message(role):
-                st.write(msg.split(":", 1)[1].strip())
+    # --- Part 1: Display the entire conversation history from session state ---
+    # 为防止旧的基于字符串的会话状态引发错误，进行一次性迁移
+    if "conversation" in st.session_state and st.session_state.conversation and isinstance(st.session_state.conversation[0], str):
+         st.session_state.conversation = []
 
-    # 用户提问处理
+    for message in st.session_state.conversation:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            # 如果是AI助手的消息，并且包含附加信息，则显示它们
+            if message["role"] == "assistant":
+                if "references" in message and message["references"]:
+                    with st.expander("📚📚 参考文档", expanded=False):
+                        for i, doc in enumerate(message["references"], 1):
+                            source = getattr(doc, "metadata", {}).get("source", f"文档{i}")
+                            content = getattr(doc, "page_content", str(doc))[:200] + "..."
+                            st.caption(f"【文献{i}】{source}")
+                            st.text(content)
+                if "analysis" in message and message["analysis"]:
+                    with st.expander("🔍🔍 语义分析详情", expanded=False):
+                        st.json(message["analysis"])
+
+    # --- Part 2: Process new input and add to history ---
     if question := st.chat_input("请输入您的问题..."):
-        st.session_state.conversation.append(f"用户: {question}")
-        
-        # 1. 上下文分析 - 检查是否与上一个问题相关
-        context_analysis = ""
-        if len(st.session_state.conversation) >= 2:
-            last_question = st.session_state.conversation[-2]
-            if last_question.startswith("用户:"):
-                last_question = last_question.split(":", 1)[1].strip()
-                
-                # 计算当前问题与上一个问题的语义相似度
-                model = st.session_state.embedding_model
-                last_embedding = model.encode([last_question])[0]
-                current_embedding = model.encode([question])[0]
-                
-                # 使用余弦相似度
-                from numpy import dot
-                from numpy.linalg import norm
-                similarity = dot(last_embedding, current_embedding)/(norm(last_embedding)*norm(current_embedding))
-                
-                if similarity > 0.7:  # 相似度阈值
-                    context_analysis = f"\n注意：这个问题与上一个问题高度相关（相似度{similarity:.2f}），请考虑上下文回答。"
-                    # 获取上一个问题的回答
-                    last_answer = ""
-                    if len(st.session_state.conversation) >= 3:
-                        last_answer_msg = st.session_state.conversation[-3]
-                        if last_answer_msg.startswith("系统:"):
-                            last_answer = last_answer_msg.split(":", 1)[1].strip()
-                    
-                    context_analysis += f"\n上一个问题: {last_question}\n上一个回答: {last_answer}"
+        # 将用户消息附加到历史记录
+        st.session_state.conversation.append({"role": "user", "content": question})
 
-        # 2. 语义分析处理
-        with st.spinner("正在分析问题语义..."):
+        # --- 所有处理逻辑在此开始 ---
+        with st.spinner("正在分析和生成回答..."):
+            # 1. 上下文分析
+            context_analysis = ""
+            similarity = 0.0  # 默认值
+            # 查找上一个用户问题进行比较
+            last_user_message = next((msg for msg in reversed(st.session_state.conversation[:-1]) if msg['role'] == 'user'), None)
+            if last_user_message:
+                last_question = last_user_message['content']
+                model = st.session_state.get("embedding_model")
+                if model:
+                    from numpy import dot
+                    from numpy.linalg import norm
+                    last_embedding = model.encode([last_question])[0]
+                    current_embedding = model.encode([question])[0]
+                    similarity = dot(last_embedding, current_embedding)/(norm(last_embedding)*norm(current_embedding))
+                    
+                    if similarity > 0.7:
+                        context_analysis = f"\n注意：这个问题与上一个问题高度相关（相似度{similarity:.2f}），请考虑上下文回答。"
+                        last_assistant_message = next((msg for msg in reversed(st.session_state.conversation[:-1]) if msg['role'] == 'assistant'), None)
+                        last_answer = last_assistant_message['content'] if last_assistant_message else ""
+                        context_analysis += f"\n上一个问题: {last_question}\n上一个回答: {last_answer}"
+                else:
+                    st.warning("嵌入模型未加载，无法进行上下文关联分析。")
+
+            # 2. 语义分析处理
             semantic_info = semantic_analysis(question)
             intent = semantic_info["intent"]
             entities = semantic_info["entities"]
-            question_embedding = semantic_info["embedding"]
 
-        # 3. 向量检索
-        docs = db_op.search_db(question, k=3)
+            # 3. 向量检索
+            docs = db_op.search_db(question, k=3)
 
-        # 4. 构建科学问答提示词（增强上下文）
-        context = "\n".join([
-            f"【文献 {i + 1}】{doc.metadata['source']}\n{doc.page_content}\n"
-            for i, doc in enumerate(docs)
-        ])
+            # 4. 构建科学问答提示词
+            context = "\n".join([
+                f"【文献 {i + 1}】{doc.metadata['source']}\n{doc.page_content}\n"
+                for i, doc in enumerate(docs)
+            ])
+            
+            history_for_prompt = '\n'.join([f"{msg['role']}: {msg['content']}" for msg in st.session_state.conversation[-7:-1]])
 
-        # 先处理对话历史
-        history = '\n'.join([msg for msg in st.session_state.conversation[-6:] if not msg.startswith('系统:')])
-
-        prompt = f"""根据以下文献内容回答问题：
+            prompt = f"""根据以下文献内容回答问题：
 {context}
 问题：{question}
 {context_analysis}
@@ -200,38 +209,28 @@ def qa_interface():
 4. 问题意图：{intent}
 5. 关键实体：{', '.join(entities)}
 6. 考虑以下对话历史：
-{history}
+{history_for_prompt}
 回答："""
 
-        # 5. 调用DeepSeek生成
-        with st.chat_message("assistant"):
-            with st.spinner("正在生成回答..."):
-                answer = ask_ai(prompt)
-                st.write(answer)
-                st.session_state.conversation.append(f"系统: {answer}")
+            # 5. 调用AI生成回答
+            answer = ask_ai(prompt)
 
-            # 显示参考文献
-            with st.expander("📚📚 参考文档", expanded=False):
-                for i, doc in enumerate(docs, 1):
-                    source = getattr(doc, "metadata", {}).get("source", getattr(doc, "source", f"文档{i}"))
-                    content = getattr(doc, "page_content", str(doc))[:200] + "..."
-                    st.caption(f"【文献{i}】{source}")
-                    st.text(content)
+            # 6. 准备用于显示的附加信息
+            analysis_details = {
+                "问题意图": intent,
+                "识别实体": entities,
+                "匹配片段数": len(docs),
+                "上下文关联度": f"{similarity:.2f}" if similarity > 0 else "无",
+                "提示词": prompt[:500] + "..." if len(prompt) > 500 else prompt
+            }
 
-            # 显示语义分析详情
-            with st.expander("🔍🔍 语义分析详情", expanded=False):
-                st.json({
-                    "问题意图": intent,
-                    "识别实体": entities,
-                    "匹配片段数": len(docs),
-                    "上下文关联度": f"{similarity:.2f}" if 'similarity' in locals() else "无",
-                    "提示词": prompt[:500] + "..." if len(prompt) > 500 else prompt
-                })
-
-        if not st.session_state.get("embedding_model"):
-            st.error("嵌入模型未加载，请刷新页面或检查模型配置。")
-            return
-
-        if not question or not question.strip():
-            st.warning("请输入有效的问题。")
-            return
+            # 7. 将包含所有信息的助手消息附加到历史记录
+            st.session_state.conversation.append({
+                "role": "assistant",
+                "content": answer,
+                "references": docs,
+                "analysis": analysis_details
+            })
+        
+        # 8. Rerun 以显示历史记录中的新消息
+        st.rerun()
