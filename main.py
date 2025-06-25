@@ -8,8 +8,7 @@ from file_registry import FileRegistry
 from session_manager import init_session, clear_session
 from config import PERSISTENT_UPLOAD_FOLDER
 from vector_store import get_vector_count
-def init_app():
-    os.makedirs(PERSISTENT_UPLOAD_FOLDER, exist_ok=True)
+
 def main():
     st.set_page_config(
         page_title="智能文献问答系统",
@@ -18,27 +17,26 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # Session state is initialized once, including models.
-    progress_container = st.empty()
+    # 仅在会话首次加载时运行初始化，并显示加载动画
+    if "initialized" not in st.session_state:
+        progress_container = st.empty()
+        with progress_container.container():
+            st.subheader("🚀 系统初始化中...")
+            init_progress = st.progress(0, text="准备系统环境...")
+            
+            # init_session() 执行所有耗时的加载操作
+            init_session()
+            
+            init_progress.progress(50, text="AI模型加载完成...")
+            time.sleep(0.5)
+            init_progress.progress(100, text="准备就绪！")
+            time.sleep(0.5)
+        
+        progress_container.empty()
+        st.session_state.initialized = True
 
-    # 步骤1: 初始化会话状态
-    with progress_container.container():
-        st.subheader("🚀 系统初始化中...")
-        init_progress = st.progress(0, text="准备系统环境")
-        init_session()  # 您的初始化函数
-        init_progress.progress(30, text="加载AI模型")
-
-    # 步骤2: 渲染主界面
-    with progress_container.container():
-        init_progress.progress(60, text="构建用户界面")
-        st.title("📚 智能文献问答系统")
-        st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
-
-    # 步骤3: 完成初始化
-    with progress_container.container():
-        init_progress.progress(100, text="准备就绪！")
-        time.sleep(0.5)  # 让用户看到完成状态
-        progress_container.empty()  # 隐藏进度条容器
+    st.title("📚 智能文献问答系统")
+    st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
 
     with st.sidebar:
         st.header("🔍 导航菜单")
@@ -46,9 +44,9 @@ def main():
         st.divider()
         st.subheader("📊 系统概览")
         col1, col2, col3 = st.columns(3)
-        col1.metric("知识文档", len(st.session_state.uploaded_files))
-        col2.metric("知识片段", len(st.session_state.knowledge_base))
-        col3.metric("回收站", len(st.session_state.deleted_files))
+        col1.metric("知识文档", len(st.session_state.get("uploaded_files", [])))
+        col2.metric("知识片段", len(st.session_state.get("knowledge_base", [])))
+        col3.metric("回收站", len(st.session_state.get("deleted_files", [])))
         st.divider()
         st.info("""
         **系统功能：**
@@ -60,6 +58,9 @@ def main():
         """)
         if st.button("清空所有数据", use_container_width=True, type="secondary"):
             clear_session()
+            # 清空后，需要重置初始化标志，以便下次可以重新加载
+            if 'initialized' in st.session_state:
+                del st.session_state['initialized']
             st.rerun()
 
     if page == "知识库管理":
@@ -69,14 +70,13 @@ def main():
 
     with st.expander("🛠️ 调试信息", expanded=False):
         st.json({
-            "文件上传数": len(st.session_state.uploaded_files),
-            "知识片段数": len(st.session_state.knowledge_base),
+            "文件上传数": len(st.session_state.get("uploaded_files", [])),
+            "知识片段数": len(st.session_state.get("knowledge_base", [])),
             "向量存储数": get_vector_count(),
-            "删除文件数": len(st.session_state.deleted_files),
-            "对话轮次": len(st.session_state.conversation) // 2
+            "删除文件数": len(st.session_state.get("deleted_files", [])),
+            "对话轮次": len(st.session_state.get("conversation", [])) if isinstance(st.session_state.get("conversation"), list) else 0
         })
 
 
 if __name__ == "__main__":
-    
     main()

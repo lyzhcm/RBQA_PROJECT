@@ -57,12 +57,17 @@ def delete_from_db_by_source_id(source_id: str):
 def clear_db():
     """清空向量数据库集合"""
     db = get_vector_db()
-    db.delete_collection()
+    try:
+        db.delete_collection()
+    except Exception as e:
+        st.warning(f"清空向量数据库集合时出错: {e}。可能集合已不存在。")
+    
     # 重置会话状态
     if "vector_db" in st.session_state:
         del st.session_state.vector_db
-    # 清理 Streamlit 资源缓存，防止 collection id 失效
-    st.cache_resource.clear()
+        
+    # 清理与DB相关的资源缓存，而不是所有缓存
+    get_vector_db.clear()
 
 def load_existing_documents() -> Optional[List[Dict]]:
     """加载向量数据库中现有的文档"""
