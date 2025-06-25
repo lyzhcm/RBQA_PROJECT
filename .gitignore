@@ -1,4 +1,6 @@
+file_registry.json
 chroma_db/
+.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -85,4 +87,3 @@ Desktop.ini
 venv/
 ENV/
 env/
-file_registry.json

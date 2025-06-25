@@ -44,18 +44,34 @@ def save_uploaded_file(file, file_id):
         return None
     
 def parse_file(file):
-    """解析上传的文件内容"""
+    """解析上传的文件内容，兼容Streamlit UploadedFile和标准文件句柄"""
     content = ""
-    file_type = file.name.split(".")[-1].lower()
+    filename = ""
+    tmp_path = None  # 初始化tmp_path
 
     try:
+        # 根据文件对象的类型获取文件名和内容
+        if hasattr(file, 'getvalue'):  # Streamlit UploadedFile
+            filename = file.name
+            file_content = file.getvalue()
+        else:  # 标准文件句柄 (from open(..., 'rb'))
+            filename = file.name
+            file_content = file.read()
+
+        file_type = filename.split(".")[-1].lower()
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}") as tmp:
-            tmp.write(file.getvalue())
+            tmp.write(file_content)
             tmp_path = tmp.name
 
         if file_type == "txt":
-            with open(tmp_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            # 尝试用utf-8解码，如果失败则尝试其他编码
+            try:
+                with open(tmp_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except UnicodeDecodeError:
+                with open(tmp_path, "r", encoding="gbk", errors='ignore') as f:
+                    content = f.read()
 
         elif file_type == "pdf":
             reader = PyPDF2.PdfReader(tmp_path)
@@ -76,12 +92,15 @@ def parse_file(file):
                     if hasattr(shape, "text") and shape.text:
                         content += shape.text + "\n"
 
-        os.unlink(tmp_path)
-        return content
+        return content if content and content.strip() else ""
 
     except Exception as e:
-        st.error(f"解析文件时出错: {str(e)}")
+        st.error(f"解析文件 '{filename}' 时出错: {str(e)}")
         return None
+    finally:
+        # 确保临时文件被删除
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
     
 def preprocess_text(text):
     """文本预处理"""
