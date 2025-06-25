@@ -6,19 +6,25 @@ openai.api_key = API_KEY
 openai.base_url = API_BASE_URL
 
 def ask_ai(question, model=DEEPSEEK_MODEL):
-    """调用DeepSeek AI接口"""
+    """调用DeepSeek AI接口，支持对话上下文"""
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {
+                "role": "system",
+                "content": "你是一个帮助进行文献管理的AI问答系统。根据提供的上下文，用精炼而科学的语言回答问题"
+            }
+        ]
+    # 添加用户消息
+    st.session_state.messages.append({"role": "user", "content": question})
     try:
         completion = openai.chat.completions.create(
             model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "你是一个帮助进行文献管理的AI问答系统。根据提供的上下文，用精炼而科学的语言回答问题"
-                },
-                {"role": "user", "content": question},
-            ],
+            messages=st.session_state.messages,
         )
-        return completion.choices[0].message.content.strip()
+        # 添加AI回复到历史
+        ai_reply = completion.choices[0].message.content.strip()
+        st.session_state.messages.append({"role": "assistant", "content": ai_reply})
+        return ai_reply
     except Exception as e:
         st.error(f"AI接口调用失败: {str(e)}")
         return "无法获取AI回答，请检查API配置"
