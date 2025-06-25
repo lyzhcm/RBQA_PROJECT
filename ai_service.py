@@ -26,6 +26,4 @@ def ask_ai(prompt, model=DEEPSEEK_MODEL):
     except Exception as e:
         st.error(f"AI接口调用失败: {str(e)}")
         return "无法获取AI回答，请检查API配置"
-        st.error(f"AI接口调用失败: {str(e)}")
-        return "无法获取AI回答，请检查API配置"
 
