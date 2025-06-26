@@ -3,11 +3,75 @@ import streamlit as st
 import pandas as pd
 import os
 import time
+import signal
+import psutil
+import webbrowser
 from UI import knowledge_base_section, qa_interface
 from file_registry import FileRegistry
 from session_manager import init_session, clear_session
 from config import PERSISTENT_UPLOAD_FOLDER
 from vector_store import get_vector_count
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+def nuclear_exit():
+    """原子级清除方案"""
+    # 1. 用HTML彻底覆盖页面
+    st.markdown("""
+    <style>body {margin:0;overflow:hidden;}</style>
+    <div id="killswitch" style='
+        position:fixed;
+        top:0;
+        left:0;
+        width:100vw;
+        height:100vh;
+        background:#000;
+        color:#f00;
+        font-family:Arial;
+        z-index:99999;
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        align-items:center;
+    '>
+        <h1>系统已终止</h1>
+        <p>请关闭页面...</p>
+    </div>
+    <script>
+        // 暴力清除DOM元素
+        document.body.innerHTML = '';
+        document.body.appendChild(document.getElementById('killswitch'));
+        
+        // 阻止Streamlit重连
+        if (window.streamlit) {
+            window.streamlit.closeConnection();
+        }
+        
+        // 最终尝试关闭窗口
+        setTimeout(() => {
+            window.open('','_self').close();
+        }, 500);
+    </script>
+    """, unsafe_allow_html=True)
+    
+    # 2. 确保页面更新
+    time.sleep(0.5)
+    
+    # 3. 彻底终止进程（Windows/Mac/Linux通用）
+    try:
+        ctx = get_script_run_ctx()
+        if ctx:
+            # 先关闭Streamlit的websocket连接
+            if hasattr(ctx, '_ws'):
+                ctx._ws.close()
+            
+            # 杀死相关进程树
+            pid = os.getpid()
+            parent = psutil.Process(pid)
+            for child in parent.children(recursive=True):
+                child.kill()
+            parent.kill()
+    except Exception:
+        os._exit(0)
 
 def main():
     st.set_page_config(
@@ -55,6 +119,8 @@ def main():
         4. 智能问答系统
         5. 文件标记与回收
         """)
+        if st.button("安全退出系统"):
+            nuclear_exit()
         if st.button("清空所有数据", use_container_width=True, type="secondary"):
             clear_session()
             # 清空后，需要重置初始化标志，以便下次可以重新加载
