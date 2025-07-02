@@ -42,3 +42,5 @@ typing-extensions>=4.7.0
 # Hugging Face相关
 huggingface-hub>=0.16.0
 tokenizers>=0.13.0
+# 关键兼容性锁定
+protobuf==4.25.3
