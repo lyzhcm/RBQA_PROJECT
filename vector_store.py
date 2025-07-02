@@ -3,6 +3,7 @@ from langchain.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from config import EMBEDDING_MODEL_LANGCHAIN, CHROMA_DB_PATH
 from typing import List, Dict, Optional
+import os
 
 @st.cache_resource
 def get_embedding_function():
@@ -17,14 +18,12 @@ def get_embedding_function():
 def get_vector_db():
     """初始化并返回ChromaDB实例"""
     embedding_function = get_embedding_function()
-    try:
-        return Chroma(
-            embedding_function=embedding_function,
-            persist_directory=CHROMA_DB_PATH
-        )
-    except Exception as e:
-        # 尝试清理缓存并重建
-        st.cache_resource.clear()
+    # 判断是否在 Streamlit Cloud（或其它无持久化环境）
+    if os.environ.get("STREMLIT_CLOUD", "") or os.environ.get("STREMLIT_ENV", "") or os.environ.get("HOME", "").startswith("/home/adminuser"):
+        # 云端环境，不设置 persist_directory
+        return Chroma(embedding_function=embedding_function)
+    else:
+        # 本地环境，允许持久化
         return Chroma(
             embedding_function=embedding_function,
             persist_directory=CHROMA_DB_PATH
