@@ -1,0 +1,44 @@
+# 核心框架
+streamlit>=1.29.0
+
+# AI 和机器学习
+openai>=1.0.0
+langchain>=0.1.0
+langchain-community>=0.0.10
+sentence-transformers>=2.2.2
+
+# 向量数据库
+chromadb>=0.4.0
+
+# 文本处理和NLP
+nltk>=3.8.1
+transformers>=4.30.0
+torch>=2.0.0
+
+# 文档处理
+PyPDF2>=3.0.1
+python-docx>=0.8.11
+python-pptx>=0.6.21
+openpyxl>=3.1.0
+
+# 数据处理
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 文件处理和安全
+werkzeug>=2.3.0
+pathlib2>=2.3.7
+
+# 系统和进程管理
+psutil>=5.9.0
+
+# HTTP 请求
+requests>=2.31.0
+
+# 其他实用工具
+python-multipart>=0.0.6
+typing-extensions>=4.7.0
+
+# Hugging Face相关
+huggingface-hub>=0.16.0
+tokenizers>=0.13.0

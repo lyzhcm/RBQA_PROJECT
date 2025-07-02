@@ -7,7 +7,8 @@ from config import (
     CHUNK_SIZE, 
     CHUNK_OVERLAP, 
     EMBEDDING_MODEL_SENTENCE_TRANSFORMER,
-    PERSISTENT_UPLOAD_FOLDER
+    PERSISTENT_UPLOAD_FOLDER,
+    API_KEY
 )
 from file_parser import parse_file, generate_file_id
 from file_registry import FileRegistry
@@ -20,6 +21,8 @@ def init_session():
     os.makedirs(PERSISTENT_UPLOAD_FOLDER, exist_ok=True)
     
     # 基础会话状态
+    if "api_key" not in st.session_state:
+        st.session_state.api_key = API_KEY
     if "conversation" not in st.session_state:
         st.session_state.conversation = []
     if "knowledge_base" not in st.session_state:

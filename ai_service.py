@@ -1,12 +1,15 @@
 import openai
 import streamlit as st
-from config import API_KEY, API_BASE_URL, DEEPSEEK_MODEL
+from config import API_BASE_URL, DEEPSEEK_MODEL
 
-openai.api_key = API_KEY
-openai.base_url = API_BASE_URL
-
-def ask_ai(prompt, model=DEEPSEEK_MODEL):
+def ask_ai(prompt, api_key, model=DEEPSEEK_MODEL):
     """调用DeepSeek AI接口"""
+    if not api_key:
+        st.error("API密钥未设置，无法调用AI服务。请在侧边栏中输入您的API密钥。")
+        return "API Key not set."
+
+    client = openai.OpenAI(api_key=api_key, base_url=API_BASE_URL)
+
     # 消息历史应由调用者（UI层）管理。
     # 此函数现在接收一个完整的提示字符串。
     messages = [
@@ -17,7 +20,7 @@ def ask_ai(prompt, model=DEEPSEEK_MODEL):
         {"role": "user", "content": prompt}
     ]
     try:
-        completion = openai.chat.completions.create(
+        completion = client.chat.completions.create(
             model=model,
             messages=messages,
         )
