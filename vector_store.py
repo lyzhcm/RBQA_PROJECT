@@ -16,19 +16,9 @@ def get_embedding_function():
 
 @st.cache_resource
 def get_vector_db():
-    """初始化并返回ChromaDB实例"""
+    """始终返回内存版 ChromaDB，不做本地持久化"""
     embedding_function = get_embedding_function()
-    # 判断是否在 Streamlit Cloud（或其它无持久化环境）
-    is_cloud = os.environ.get("HOME", "").startswith("/home/adminuser")
-    if is_cloud:
-        # 云端环境，不设置 persist_directory
-        return Chroma(embedding_function=embedding_function)
-    else:
-        # 本地环境，允许持久化
-        return Chroma(
-            embedding_function=embedding_function,
-            persist_directory=CHROMA_DB_PATH
-        )
+    return Chroma(embedding_function=embedding_function)
 
 def add_texts_to_db(texts: List[str], metadatas: List[Dict]):
     """添加文本和元数据到向量数据库"""
