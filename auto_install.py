@@ -13,7 +13,8 @@ REQUIRED_PACKAGES = [
     "python-docx",
     "nltk",
     "openpyxl",
-    "psutil"
+    "psutil",
+    "protobuf==4.25.3"
 ]
 
 def install(package):
