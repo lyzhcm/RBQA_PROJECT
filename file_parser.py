@@ -43,22 +43,27 @@ def save_uploaded_file(file, file_id):
         st.error(f"文件保存失败: {str(e)}")
         return None
     
-def parse_file(file):
+def parse_file(file, original_filename=None):
     """解析上传的文件内容，兼容Streamlit UploadedFile和标准文件句柄"""
     content = ""
-    filename = ""
+    filename_for_error = ""
     tmp_path = None  # 初始化tmp_path
 
     try:
         # 根据文件对象的类型获取文件名和内容
         if hasattr(file, 'getvalue'):  # Streamlit UploadedFile
-            filename = file.name
+            filename_for_type = file.name
+            filename_for_error = file.name
             file_content = file.getvalue()
         else:  # 标准文件句柄 (from open(..., 'rb'))
-            filename = file.name
+            # 对于文件句柄，必须依赖传递的original_filename来获取类型
+            filename_for_type = original_filename if original_filename else file.name
+            filename_for_error = file.name # 在错误日志中记录实际路径
             file_content = file.read()
 
-        file_type = filename.split(".")[-1].lower()
+        # 使用os.path.splitext安全地获取文件扩展名
+        _ , file_ext = os.path.splitext(filename_for_type)
+        file_type = file_ext.lower().replace('.', '')
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_type}") as tmp:
             tmp.write(file_content)
@@ -95,7 +100,7 @@ def parse_file(file):
         return content if content and content.strip() else ""
 
     except Exception as e:
-        st.error(f"解析文件 '{filename}' 时出错: {str(e)}")
+        st.error(f"解析文件 '{filename_for_error}' 时出错: {str(e)}")
         return None
     finally:
         # 确保临时文件被删除
