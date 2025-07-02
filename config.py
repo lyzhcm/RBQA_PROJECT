@@ -4,6 +4,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"  # 强制所有Hugging Face�
 os.environ["HF_HUB_OFFLINE"] = "0"                   # 确保仍允许在线下载（默认值）
 
 # API 配置
+# 默认API密钥，可以在应用的UI界面中进行覆盖
 API_KEY = "sk-g40Ua40lLiQhMcEN1b710a5d63E14bD89921Ed47D8B371Fb"
 API_BASE_URL = "https://api.gpt.ge/v1/"
 DEEPSEEK_MODEL = "deepseek-chat"

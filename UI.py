@@ -238,7 +238,7 @@ def qa_interface():
 回答："""
 
             # 5. 调用AI生成回答
-            answer = ask_ai(prompt)
+            answer = ask_ai(prompt, st.session_state.api_key)
 
             # 6. 准备用于显示的附加信息
             analysis_details = {

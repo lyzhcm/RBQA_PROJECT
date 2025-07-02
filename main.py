@@ -9,7 +9,7 @@ import webbrowser
 from UI import knowledge_base_section, qa_interface
 from file_registry import FileRegistry
 from session_manager import init_session, clear_session
-from config import PERSISTENT_UPLOAD_FOLDER
+from config import PERSISTENT_UPLOAD_FOLDER, API_KEY
 from vector_store import get_vector_count
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
@@ -98,6 +98,7 @@ def main():
         
         progress_container.empty()
         st.session_state.initialized = True
+        # st.toast(f"当前 API Key: {API_KEY}") # 移除旧的toast提示
 
     st.title("📚 智能文献问答系统")
     st.caption("知识库构建、管理及智能问答平台 | 支持文档处理与语义分析")
@@ -105,6 +106,20 @@ def main():
     with st.sidebar:
         st.header("🔍 导航菜单")
         page = st.radio("选择功能", ["知识库管理", "智能问答"], horizontal=True)
+        
+        st.divider()
+        
+        # API密钥设置
+        st.subheader("🔑 API密钥设置")
+        api_key_input = st.text_input(
+            "输入您的API密钥",
+            type="password",
+            value=st.session_state.get("api_key", ""),
+            help="在此输入您的API密钥以使用问答功能。"
+        )
+        if api_key_input:
+            st.session_state.api_key = api_key_input
+
         st.divider()
         st.subheader("📊 系统概览")
         col1, col2 = st.columns(2)
