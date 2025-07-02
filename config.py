@@ -1,4 +1,8 @@
 # config.py（仅保留常量）
+import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"  # 强制所有Hugging Face请求走国内镜像
+os.environ["HF_HUB_OFFLINE"] = "0"                   # 确保仍允许在线下载（默认值）
+
 # API 配置
 API_KEY = "sk-g40Ua40lLiQhMcEN1b710a5d63E14bD89921Ed47D8B371Fb"
 API_BASE_URL = "https://api.gpt.ge/v1/"
