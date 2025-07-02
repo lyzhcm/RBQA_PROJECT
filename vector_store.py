@@ -19,7 +19,8 @@ def get_vector_db():
     """初始化并返回ChromaDB实例"""
     embedding_function = get_embedding_function()
     # 判断是否在 Streamlit Cloud（或其它无持久化环境）
-    if os.environ.get("STREAMLIT_CLOUD", "") or os.environ.get("STREAMLIT_ENV", "") or os.environ.get("HOME", "").startswith("/home/adminuser"):
+    is_cloud = os.environ.get("HOME", "").startswith("/home/adminuser")
+    if is_cloud:
         # 云端环境，不设置 persist_directory
         return Chroma(embedding_function=embedding_function)
     else:
@@ -92,3 +93,5 @@ def get_vector_count():
             return 0
     except Exception as e:
         return 0
+
+#st.session_state.vector_db = get_vector_db()

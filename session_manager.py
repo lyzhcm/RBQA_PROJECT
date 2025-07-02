@@ -49,9 +49,12 @@ def init_session():
         )
     
     # 初始化向量数据库
-    if "vector_db" not in st.session_state:
-        st.session_state.vector_db = get_vector_db()
-    
+    is_cloud = os.environ.get("HOME", "").startswith("/home/adminuser")
+    if not is_cloud:
+        if "vector_db" not in st.session_state:
+            st.session_state.vector_db = get_vector_db()
+    # 云端环境下不要放入 session_state，直接用 get_vector_db() 即可
+
     # 从持久化存储加载文件
     # 此逻辑仅在会话中尚未填充文件列表时运行。
     # 这能处理初次启动和会话清除后的重新加载。
