@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import PyPDF2
 import tempfile
-import pptx
+from pptx import Presentation  # 修复导入方式
 from docx import Document
 import streamlit as st
 import hashlib
@@ -91,7 +91,7 @@ def parse_file(file, original_filename=None):
                 content += para.text + "\n"
 
         elif file_type == "pptx":
-            prs = pptx.Presentation(tmp_path)
+            prs = Presentation(tmp_path)  # 使用正确的类名
             for slide in prs.slides:
                 for shape in slide.shapes:
                     if hasattr(shape, "text") and shape.text:
